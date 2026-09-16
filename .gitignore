@@ -1,0 +1,112 @@
+# ==============================================================================
+# OILTRACE — Version Control Ignore Rules
+# ==============================================================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# C extensions & build artifacts
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+
+# Virtual Environments
+.venv
+.venv/
+venv/
+ENV/
+env/
+
+# Node.js & Frontend dependencies/build
+node_modules/
+**/node_modules/
+**/dist/
+**/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment & Secrets (STRICT: Never commit secrets)
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+credentials.json
+client_secret*.json
+service-account*.json
+
+# SQLite Databases & Storage
+*.db
+*.sqlite
+*.sqlite3
+
+# Large Model Checkpoints & Binary Weights (Use Git LFS or external artifact repository)
+*.pt
+*.pth
+*.bin
+*.onnx
+*.safetensors
+ml/models/unet/checkpoints/*.pt
+
+# Large Datasets & Storage (Preserve directory structure via .gitkeep)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/satellite/*
+!data/satellite/.gitkeep
+data/ais/*
+!data/ais/.gitkeep
+data/environmental/*
+!data/environmental/.gitkeep
+data/demo/*
+!data/demo/.gitkeep
+
+# Archives and dumps
+*.tar.gz
+*.zip
+*.7z
+*.rar
+
+# Operating Systems & IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
