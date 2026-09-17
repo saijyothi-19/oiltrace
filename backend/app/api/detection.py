@@ -132,14 +132,61 @@ async def upload_and_detect(
     end-to-end preprocessing, U-Net inference, geospatial polygonization pipeline,
     and creates both a SatelliteImage record and a SpillEvent record.
     """
+    # 1. Extension & Format Validation
+    filename = file.filename or ""
+    ext = os.path.splitext(filename)[1].lower()
+    allowed_exts = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".npy", ".webp"}
+    if ext not in allowed_exts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file format. Please upload .tif, .png, .npy, .jpg, .jpeg, or .webp."
+        )
+
+    # 2. MIME type check if present
+    if file.content_type:
+        allowed_mimes = (
+            "image/tiff", "image/png", "image/jpeg", "image/webp",
+            "application/octet-stream", "application/x-numpy", "binary/octet-stream"
+        )
+        if not (file.content_type.startswith("image/") or file.content_type in allowed_mimes):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported file format. Please upload .tif, .png, .npy, .jpg, .jpeg, or .webp."
+            )
+
+    contents = await file.read()
+
+    # 3. File size validation (50 MB limit)
+    max_size_bytes = 50 * 1024 * 1024
+    if len(contents) > max_size_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File size exceeds the 50MB limit."
+        )
+    if len(contents) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty."
+        )
+
+    # 4. Image corruption / validity verification
+    if ext in (".png", ".jpg", ".jpeg", ".webp"):
+        from PIL import Image
+        try:
+            with Image.open(io.BytesIO(contents)) as test_img:
+                test_img.verify()
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Corrupted or invalid {ext.upper().lstrip('.')} image file."
+            )
+
+    # Save uploaded file
     upload_dir = os.path.join(settings.DATA_DIR, "satellite", "uploads")
     os.makedirs(upload_dir, exist_ok=True)
 
-    file_id = f"{uuid.uuid4().hex[:12]}_{file.filename}"
+    file_id = f"{uuid.uuid4().hex[:12]}_{filename}"
     file_path = os.path.join(upload_dir, file_id)
-
-    # Save uploaded file
-    contents = await file.read()
     with open(file_path, "wb") as f:
         f.write(contents)
 

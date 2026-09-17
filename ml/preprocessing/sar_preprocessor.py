@@ -30,6 +30,17 @@ class SarPreprocessor:
             return img.astype(np.float32)
         elif ext in (".npy",):
             return np.load(input_path).astype(np.float32)
+        elif ext in (".webp",):
+            # WebP decoding: Pillow handles RGB, RGBA, and lossy/lossless WebP variants
+            try:
+                with Image.open(input_path) as pil_img:
+                    gray_img = pil_img.convert("L")
+                    return np.array(gray_img, dtype=np.float32)
+            except Exception as e:
+                img = cv2.imread(input_path, cv2.IMREAD_GRAYSCALE)
+                if img is None:
+                    raise ValueError(f"Corrupted or unreadable WebP image: {e}")
+                return img.astype(np.float32)
         else:
             # Fallback to OpenCV / Pillow
             img = cv2.imread(input_path, cv2.IMREAD_GRAYSCALE)
@@ -96,7 +107,7 @@ class SarPreprocessor:
         raw = cls.load_raster(input_path)
         ext = os.path.splitext(input_path)[1].lower()
 
-        if ext in (".png", ".jpg", ".jpeg") and cfg.get("apply_calibration") is None:
+        if ext in (".png", ".jpg", ".jpeg", ".webp") and cfg.get("apply_calibration") is None:
             # 8-bit preview image: scale directly from 0-255 to [0, 1]
             normalized = raw / 255.0
             if apply_despeckle:

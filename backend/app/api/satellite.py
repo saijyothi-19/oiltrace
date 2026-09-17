@@ -67,10 +67,11 @@ async def upload_satellite_image(
     # Validate extension
     filename = file.filename or "scene.tif"
     ext = os.path.splitext(filename)[1].lower()
-    if ext not in (".tif", ".tiff", ".png", ".jpg", ".npy", ".nc"):
+    allowed_exts = (".tif", ".tiff", ".png", ".jpg", ".jpeg", ".npy", ".nc", ".webp")
+    if ext not in allowed_exts:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported raster file extension. Supported formats: .tif, .tiff, .png, .npy, .nc"
+            detail="Unsupported file format. Please upload .tif, .png, .npy, .jpg, .jpeg, or .webp."
         )
 
     # Save file outside executable directories

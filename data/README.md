@@ -26,7 +26,8 @@ data/
 ## 2. Ingestion & Data Sources
 
 ### A. Satellite SAR Imagery (`data/satellite/` or `data/raw/`)
-* **Expected Format**: Sentinel-1 Level-1 Ground Range Detected (GRD) C-Band SAR products (Interferometric Wide swath mode, VV/VH polarization) in GeoTIFF or standard raster format (`.tif`, `.tiff`, `.png`).
+* **Expected Format**: Sentinel-1 Level-1 Ground Range Detected (GRD) C-Band SAR products (Interferometric Wide swath mode, VV/VH polarization) in GeoTIFF or standard raster image format (`.tif`, `.tiff`, `.png`, `.jpg`, `.jpeg`, `.webp`).
+  > *Note on WebP/Image Uploads: WebP is supported as an 8-bit image raster representation. Scientific SAR analysis with radiometric sigma0 backscatter calibration may require calibrated/georeferenced data such as GeoTIFF or calibrated NumPy float32 arrays.*
 * **Source**:
   * Free Copernicus Data Space Ecosystem: [https://dataspace.copernicus.eu/](https://dataspace.copernicus.eu/)
   * Alaska Satellite Facility (ASF) Vertex: [https://search.asf.alaska.edu/](https://search.asf.alaska.edu/)

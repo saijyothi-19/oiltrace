@@ -148,11 +148,11 @@ export const SpillsPage: React.FC = () => {
             <form onSubmit={handleUploadSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">
-                  SAR Raster File (.tif, .png, .npy, .jpg)
+                  SAR Raster File (.tif, .png, .npy, .jpg, .webp)
                 </label>
                 <input
                   type="file"
-                  accept=".tif,.tiff,.png,.npy,.jpg,.jpeg"
+                  accept=".tif,.tiff,.png,.npy,.jpg,.jpeg,.webp"
                   required
                   onChange={(e) => setUploadFile(e.target.files ? e.target.files[0] : null)}
                   className="w-full text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer bg-slate-950 border border-slate-800 rounded-lg p-2"

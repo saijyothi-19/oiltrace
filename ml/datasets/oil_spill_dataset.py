@@ -223,7 +223,7 @@ class OilSpillDataset(Dataset):
 
         # Find image files
         self.image_files = []
-        for ext in ("*.npy", "*.tif", "*.tiff", "*.png", "*.jpg"):
+        for ext in ("*.npy", "*.tif", "*.tiff", "*.png", "*.jpg", "*.jpeg", "*.webp"):
             self.image_files.extend(glob.glob(os.path.join(images_dir, ext)))
 
         # Filter out PNG previews if NPY exists
@@ -248,18 +248,30 @@ class OilSpillDataset(Dataset):
         else:
             arr = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
             if arr is None:
-                raise FileNotFoundError(f"Cannot load image at {path}")
+                from PIL import Image
+                try:
+                    with Image.open(path) as pil_img:
+                        arr = np.array(pil_img.convert("L"))
+                except Exception:
+                    raise FileNotFoundError(f"Cannot load image at {path}")
             arr = arr.astype(np.float32) / 255.0
         return arr
 
     def _load_mask(self, base_name: str) -> np.ndarray:
-        for ext in (".png", ".npy", ".tif", ".tiff"):
+        for ext in (".png", ".npy", ".tif", ".tiff", ".webp"):
             candidate = os.path.join(self.masks_dir, base_name + ext)
             if os.path.exists(candidate):
                 if candidate.endswith(".npy"):
                     mask = np.load(candidate)
                 else:
                     mask = cv2.imread(candidate, cv2.IMREAD_GRAYSCALE)
+                    if mask is None:
+                        from PIL import Image
+                        try:
+                            with Image.open(candidate) as pil_img:
+                                mask = np.array(pil_img.convert("L"))
+                        except Exception:
+                            continue
                 return (mask > 127).astype(np.float32)
 
         # If mask file does not exist, return blank background mask

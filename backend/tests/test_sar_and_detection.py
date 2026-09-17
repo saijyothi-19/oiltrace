@@ -112,3 +112,65 @@ def test_spills_api_crud(client):
     patch_resp = client.patch(f"/api/spills/{spill_id}", json={"status": "ACCEPTED"})
     assert patch_resp.status_code == 200
     assert patch_resp.json()["status"] == "ACCEPTED"
+
+
+def test_webp_preprocessing_and_decoding(tmp_path):
+    from PIL import Image
+    # Create valid synthetic WebP image
+    webp_path = str(tmp_path / "test_scene.webp")
+    arr = np.random.randint(50, 220, size=(128, 128), dtype=np.uint8)
+    arr[40:70, 40:70] = 25  # simulated dark slick feature
+    img = Image.fromarray(arr)
+    img.save(webp_path, "WEBP")
+
+    # Verify SarPreprocessor loads and normalizes WebP
+    result = SarPreprocessor.preprocess_sar(webp_path)
+    norm = result["processed_array"]
+    assert norm.shape == (128, 128)
+    assert norm.dtype == np.float32
+    assert 0.0 <= result["min_val"] <= 1.0
+    assert 0.0 <= result["max_val"] <= 1.0
+
+
+def test_webp_upload_and_detect(client, tmp_path):
+    import io
+    from PIL import Image
+    # Generate valid WebP bytes
+    arr = np.full((128, 128), 180, dtype=np.uint8)
+    arr[30:70, 30:70] = 30  # Dark slick patch
+    pil_img = Image.fromarray(arr)
+    buf = io.BytesIO()
+    pil_img.save(buf, format="WEBP")
+    buf.seek(0)
+
+    files = {"file": ("sar_scene.webp", buf.getvalue(), "image/webp")}
+    data = {
+        "threshold": "0.4",
+        "min_area_km2": "0.001",
+        "min_lon": "72.1",
+        "min_lat": "18.6",
+        "max_lon": "72.9",
+        "max_lat": "19.4",
+        "filter_lookalikes": "false"
+    }
+    resp = client.post("/api/detection/upload-and-detect", files=files, data=data)
+    assert resp.status_code in (200, 201)
+    json_data = resp.json()
+    assert "id" in json_data or "spill_detected" in str(json_data)
+
+
+def test_corrupted_webp_upload_rejected(client):
+    files = {"file": ("corrupted.webp", b"NOT_A_REAL_WEBP_IMAGE_CONTENT_DATA", "image/webp")}
+    data = {"threshold": "0.5"}
+    resp = client.post("/api/detection/upload-and-detect", files=files, data=data)
+    assert resp.status_code == 400
+    assert "Corrupted or invalid" in resp.json().get("error", {}).get("message", "") or "Corrupted or invalid" in resp.text
+
+
+def test_unsupported_file_extension_rejected(client):
+    files = {"file": ("notes.txt", b"This is a text file, not a raster.", "text/plain")}
+    data = {"threshold": "0.5"}
+    resp = client.post("/api/detection/upload-and-detect", files=files, data=data)
+    assert resp.status_code == 400
+    assert "Unsupported file format" in resp.json().get("error", {}).get("message", "") or "Unsupported file format" in resp.text
+
