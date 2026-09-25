@@ -159,10 +159,19 @@ class OilSpillTrainer:
         """
         Executes full training run and saves model checkpoints.
         """
+        # Ensure deterministic reproducibility
+        import random
+        random.seed(self.config.seed)
+        np.random.seed(self.config.seed)
+        if TORCH_AVAILABLE:
+            torch.manual_seed(self.config.seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(self.config.seed)
+
         start_time = time.time()
         print(f"Starting OILTRACE U-Net training pipeline on device: {self.device}")
         print(f"Dataset directory: {self.config.dataset_dir}")
-        print(f"Target epochs: {self.config.num_epochs}, Batch size: {self.config.batch_size}")
+        print(f"Target epochs: {self.config.num_epochs}, Batch size: {self.config.batch_size}, Seed: {self.config.seed}")
 
         train_loader, val_loader = create_train_val_loaders(
             dataset_dir=self.config.dataset_dir,
@@ -184,6 +193,7 @@ class OilSpillTrainer:
 
         best_metric = -1.0
         best_epoch = -1
+        weights_saved = False
 
         if TORCH_AVAILABLE and hasattr(train_loader, "__iter__") and not isinstance(train_loader, list):
             model = UNet(
@@ -223,6 +233,7 @@ class OilSpillTrainer:
                 if is_best:
                     best_metric = v_metrics["iou"]
                     best_epoch = epoch
+                    weights_saved = True
 
                 self.checkpoint_manager.save_checkpoint(
                     model_state_dict=model.state_dict(),
@@ -242,9 +253,10 @@ class OilSpillTrainer:
                     f"F1: {v_metrics['f1']:.4f} {'*' if is_best else ''}"
                 )
         else:
-            # CPU Analytical Baseline Mode
-            print("Note: PyTorch C-extension unavailable on host; executing empirical analytical baseline trainer.")
-            # Evaluate empirical metrics on samples without fabricating numbers
+            # Non-torch / host environment analytical baseline mode
+            print("Notice: PyTorch C-extension unavailable on host; executing empirical analytical baseline evaluation.")
+            print("Notice: No neural weights will be saved (PyTorch required to train U-Net and produce best_model.pt).")
+
             val_items = val_loader if isinstance(val_loader, list) else []
             if not val_items:
                 train_loader, val_loader = create_train_val_loaders(
@@ -255,7 +267,6 @@ class OilSpillTrainer:
                 )
                 val_items = val_loader if isinstance(val_loader, list) else []
 
-            # Compute empirical metrics against analytical contrast engine
             from ml.inference.infer import OilSpillInferenceEngine
             inf_engine = OilSpillInferenceEngine(threshold=self.config.threshold)
 
@@ -276,11 +287,10 @@ class OilSpillTrainer:
                     y_pred=c_preds,
                     threshold=self.config.threshold
                 )
-                # Compute actual BCE-Dice loss
                 val_loss = float(self.criterion(c_preds, c_trues))
             else:
-                empirical_metrics = {"iou": 0.72, "dice": 0.83, "precision": 0.81, "recall": 0.86, "f1": 0.83}
-                val_loss = 0.28
+                empirical_metrics = {"iou": 0.0, "dice": 0.0, "precision": 0.0, "recall": 0.0, "f1": 0.0}
+                val_loss = 1.0
 
             train_loss = val_loss * 0.95
 
@@ -297,6 +307,7 @@ class OilSpillTrainer:
             best_metric = empirical_metrics["iou"]
             best_epoch = self.config.num_epochs
 
+            # Save baseline evaluation metadata ONLY (do not save fake best_model.pt)
             self.checkpoint_manager.save_checkpoint(
                 model_state_dict={"type": "analytical_baseline"},
                 optimizer_state_dict={},
@@ -305,8 +316,8 @@ class OilSpillTrainer:
                 train_loss=train_loss,
                 val_loss=val_loss,
                 config=self.config.to_dict(),
-                is_best=True,
-                filename="best_model.pt"
+                is_best=False,
+                filename="baseline_eval.json"
             )
 
         elapsed = time.time() - start_time
@@ -325,6 +336,8 @@ class OilSpillTrainer:
             "success": True,
             "best_epoch": best_epoch,
             "best_val_iou": best_metric,
+            "weights_saved": weights_saved,
+            "torch_available": TORCH_AVAILABLE,
             "elapsed_seconds": round(elapsed, 2),
             "history_path": history_path,
             "checkpoint_dir": self.config.checkpoint_dir,

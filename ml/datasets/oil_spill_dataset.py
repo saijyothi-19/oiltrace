@@ -340,47 +340,91 @@ def create_train_val_loaders(
     dataset_dir: str,
     batch_size: int = 4,
     val_split: float = 0.2,
-    seed: int = 42
+    seed: int = 42,
+    augment_train: bool = True,
+    target_size: Optional[Tuple[int, int]] = (256, 256),
+    allow_synthetic_fallback: bool = False
 ) -> Tuple[Any, Any]:
     """
     Creates train and validation loaders from a dataset directory.
-    If PyTorch is available, returns (DataLoader, DataLoader).
-    If PyTorch is not available, returns Python generator iterables.
+    Supports:
+    1. Structured split format:
+       dataset_dir/train/images and dataset_dir/train/masks
+       dataset_dir/val/images and dataset_dir/val/masks
+    2. Flat format with automatic split:
+       dataset_dir/images and dataset_dir/masks
     """
+    train_img_dir = os.path.join(dataset_dir, "train", "images")
+    train_mask_dir = os.path.join(dataset_dir, "train", "masks")
+    val_img_dir = os.path.join(dataset_dir, "val", "images")
+    val_mask_dir = os.path.join(dataset_dir, "val", "masks")
+
+    # 1. Structured split format check
+    if os.path.exists(train_img_dir) and os.path.exists(val_img_dir):
+        train_ds = OilSpillDataset(
+            images_dir=train_img_dir,
+            masks_dir=train_mask_dir,
+            augment=augment_train,
+            target_size=target_size
+        )
+        val_ds = OilSpillDataset(
+            images_dir=val_img_dir,
+            masks_dir=val_mask_dir,
+            augment=False,
+            target_size=target_size
+        )
+
+        if len(train_ds) == 0 or len(val_ds) == 0:
+            raise ValueError(
+                f"Structured dataset directory '{dataset_dir}' has empty train ({len(train_ds)}) "
+                f"or val ({len(val_ds)}) sets. Please place real SAR images and masks into the directories."
+            )
+
+        if TORCH_AVAILABLE:
+            train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+            val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
+            return train_loader, val_loader
+        else:
+            return [train_ds[i] for i in range(len(train_ds))], [val_ds[i] for i in range(len(val_ds))]
+
+    # 2. Flat format: dataset_dir/images and dataset_dir/masks
     images_dir = os.path.join(dataset_dir, "images")
     masks_dir = os.path.join(dataset_dir, "masks")
 
-    # If dataset directory is empty or missing, create synthetic demonstration dataset
     if not os.path.exists(images_dir) or len(glob.glob(os.path.join(images_dir, "*"))) == 0:
-        SyntheticSarDatasetGenerator.create_dataset_directory(
-            output_dir=dataset_dir,
-            num_samples=25,
-            seed=seed
-        )
+        if allow_synthetic_fallback:
+            SyntheticSarDatasetGenerator.create_dataset_directory(
+                output_dir=dataset_dir,
+                num_samples=25,
+                seed=seed
+            )
+        else:
+            raise FileNotFoundError(
+                f"No images found in dataset directory '{dataset_dir}'. "
+                f"Expected structured splits ({dataset_dir}/train/images and {dataset_dir}/val/images) "
+                f"or flat format ({dataset_dir}/images and {dataset_dir}/masks)."
+            )
 
-    all_files = sorted(glob.glob(os.path.join(images_dir, "*.npy")))
-    if not all_files:
-        all_files = sorted(glob.glob(os.path.join(images_dir, "*.png")))
+    full_ds = OilSpillDataset(images_dir=images_dir, masks_dir=masks_dir, augment=False, target_size=target_size)
+    if len(full_ds) == 0:
+        raise ValueError(f"Dataset in '{dataset_dir}' contains 0 readable samples.")
 
     random.seed(seed)
-    indices = list(range(len(all_files)))
+    indices = list(range(len(full_ds)))
     random.shuffle(indices)
 
-    split_idx = int(len(indices) * (1.0 - val_split))
-    train_indices = set(indices[:split_idx])
-    val_indices = set(indices[split_idx:])
-
-    full_ds = OilSpillDataset(images_dir=images_dir, masks_dir=masks_dir, augment=False)
+    split_idx = max(1, int(len(indices) * (1.0 - val_split)))
+    train_indices = indices[:split_idx]
+    val_indices = indices[split_idx:] if split_idx < len(indices) else indices[:1]
 
     if TORCH_AVAILABLE:
         from torch.utils.data import Subset
-        train_sub = Subset(full_ds, list(train_indices))
-        val_sub = Subset(full_ds, list(val_indices))
+        train_sub = Subset(full_ds, train_indices)
+        val_sub = Subset(full_ds, val_indices)
         train_loader = DataLoader(train_sub, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_sub, batch_size=batch_size, shuffle=False)
         return train_loader, val_loader
     else:
-        # Fallback generator for environments without PyTorch
         train_items = [full_ds[i] for i in train_indices]
         val_items = [full_ds[i] for i in val_indices]
         return train_items, val_items

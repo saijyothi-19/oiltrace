@@ -18,24 +18,56 @@ class OilSpillInferenceEngine:
         threshold: float = 0.5,
         filter_lookalikes: bool = True
     ):
-        self.model_path = model_path
         self.threshold = threshold
         self.filter_lookalikes = filter_lookalikes
         self.lookalike_filter = RuleBasedLookAlikeFilter()
         self.torch_model = None
+        self.model_path = None
 
-        if model_path and os.path.exists(model_path):
-            self._load_torch_model(model_path)
+        candidate_paths = []
+        if model_path:
+            candidate_paths.append(model_path)
+        else:
+            repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+            candidate_paths.extend([
+                os.path.join(repo_root, "data", "models", "best_model.pt"),
+                os.path.join(repo_root, "ml", "models", "unet", "checkpoints", "best_model.pt"),
+                os.path.join(repo_root, "ml", "models", "unet", "checkpoints", "unet_oilspill_baseline.pt"),
+            ])
+
+        for p in candidate_paths:
+            if os.path.exists(p):
+                self._load_torch_model(p)
+                if self.torch_model is not None:
+                    self.model_path = p
+                    break
 
     def _load_torch_model(self, path: str):
         try:
             import torch
             from ml.models.unet.unet_model import UNet
             model = UNet(in_channels=1, out_channels=1)
-            state_dict = torch.load(path, map_location="cpu", weights_only=True)
+
+            try:
+                checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+            except Exception:
+                checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+
+            if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+                state_dict = checkpoint["model_state_dict"]
+            elif isinstance(checkpoint, dict):
+                state_dict = checkpoint
+            else:
+                state_dict = checkpoint
+
+            if not isinstance(state_dict, dict) or not any(k.startswith(("enc", "inc", "conv", "dec", "outc")) for k in state_dict.keys()):
+                self.torch_model = None
+                return
+
             model.load_state_dict(state_dict)
             model.eval()
             self.torch_model = model
+            self.model_path = path
         except Exception:
             self.torch_model = None
 

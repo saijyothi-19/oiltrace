@@ -90,6 +90,10 @@ data/environmental/*
 !data/environmental/.gitkeep
 data/demo/*
 !data/demo/.gitkeep
+data/dataset/*
+!data/dataset/**/.gitkeep
+data/models/*
+!data/models/.gitkeep
 backend/data/*
 !backend/data/.gitkeep
 

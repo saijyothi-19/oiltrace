@@ -306,14 +306,32 @@ def get_model_status():
         except Exception:
             pass
 
+    engine = OilSpillInferenceEngine()
+    is_trained = (engine.torch_model is not None)
+    active_model_type = "UNET" if is_trained else "ANALYTICAL_CONTRAST"
+    is_demo = not is_trained
+
     return {
         "active_architecture": "UNet",
-        "version": "v1.0-baseline",
+        "active_model_type": active_model_type,
+        "is_trained": is_trained,
+        "is_demo": is_demo,
+        "active_weights_path": engine.model_path,
+        "version": "v1.0-deep-conv-unet" if is_trained else "v1.0-radiometric-contrast-demo",
+        "diagnostic_notice": (
+            "Deep Convolutional U-Net segmentation loaded from trained weights."
+            if is_trained
+            else "Analytical radiometric contrast fallback active (Demo mode: no trained weights found at data/models/best_model.pt)."
+        ),
         "total_checkpoints": len(checkpoints),
         "checkpoints": checkpoints,
         "latest_training": history_summary,
         "supported_input": "Single-channel SAR (VV/VH backscatter)",
-        "synthetic_watermark": "Synthetic demonstration data — not real-world evidence."
+        "synthetic_watermark": (
+            "Synthetic demonstration data — not real-world evidence."
+            if is_demo
+            else ""
+        )
     }
 
 

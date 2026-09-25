@@ -58,27 +58,37 @@ class CheckpointManager:
 
         save_path = os.path.join(self.checkpoint_dir, filename)
 
-        if TORCH_AVAILABLE and isinstance(model_state_dict, dict):
+        is_neural = (
+            TORCH_AVAILABLE
+            and isinstance(model_state_dict, dict)
+            and any(k.startswith(("enc", "inc", "conv", "dec", "outc")) for k in model_state_dict.keys())
+        )
+
+        if is_neural:
             torch_payload = {
                 **checkpoint_data,
                 "model_state_dict": model_state_dict,
                 "optimizer_state_dict": optimizer_state_dict,
             }
             torch.save(torch_payload, save_path)
+            if is_best:
+                best_target = os.path.join(self.checkpoint_dir, "best_model.pt")
+                torch.save(torch_payload, best_target)
+
+                # Also save to primary real-model directory data/models/best_model.pt
+                repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+                data_models_target = os.path.join(repo_root, "data", "models", "best_model.pt")
+                os.makedirs(os.path.dirname(data_models_target), exist_ok=True)
+                torch.save(torch_payload, data_models_target)
         else:
-            # Metadata stub file if running in non-torch environment
+            # Metadata stub file if running in non-torch / non-neural environment
             meta_path = save_path if save_path.endswith(".json") else save_path + ".json"
             with open(meta_path, "w", encoding="utf-8") as f:
                 json.dump(checkpoint_data, f, indent=2)
             save_path = meta_path
-
-        # Save copy as best_model if requested
-        if is_best:
-            best_target = os.path.join(self.checkpoint_dir, "best_model.pt")
-            if TORCH_AVAILABLE and isinstance(model_state_dict, dict):
-                torch.save(torch_payload, best_target)
-            else:
-                with open(best_target + ".json", "w", encoding="utf-8") as f:
+            if is_best:
+                best_meta = os.path.join(self.checkpoint_dir, "best_model.json")
+                with open(best_meta, "w", encoding="utf-8") as f:
                     json.dump(checkpoint_data, f, indent=2)
 
         # Save metadata summary
