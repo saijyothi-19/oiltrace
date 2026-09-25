@@ -1,5 +1,5 @@
 import os
-from typing import List, Union
+from typing import List, Union, Optional
 from pydantic import AnyHttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -53,6 +53,18 @@ class Settings(BaseSettings):
     # AIS Correlation
     SPATIAL_RADIUS_KM: float = 50.0
     TEMPORAL_WINDOW_HOURS: float = 12.0
+
+    # Copernicus Data Space Ecosystem (CDSE) & Sentinel-1
+    COPERNICUS_CLIENT_ID: Optional[str] = None
+    COPERNICUS_CLIENT_SECRET: Optional[str] = None
+    COPERNICUS_TOKEN_URL: str = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+    COPERNICUS_API_URL: str = "https://catalogue.dataspace.copernicus.eu/odata/v1/Products"
+
+    # Copernicus Marine Service (CMEMS) & Open-Meteo Environmental APIs
+    COPERNICUS_MARINE_USERNAME: Optional[str] = None
+    COPERNICUS_MARINE_PASSWORD: Optional[str] = None
+    OPEN_METEO_MARINE_API_URL: str = "https://marine-api.open-meteo.com/v1/marine"
+    OPEN_METEO_WEATHER_API_URL: str = "https://api.open-meteo.com/v1/forecast"
 
     # Directories
     DATA_DIR: str = "./data"

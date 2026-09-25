@@ -30,6 +30,7 @@ class DriftSimulationResponse(BaseModel):
     confidence: float
     status: SimulationStatus
     origin_probability_geometry: Optional[Dict[str, Any]] = None
+    parameters_json: Optional[Dict[str, Any]] = None
     created_at: datetime
     particles: Optional[List[DriftParticleResponse]] = None
 

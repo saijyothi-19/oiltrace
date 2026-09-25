@@ -39,5 +39,7 @@ class VesselCandidateResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class AttributionAnalyzeRequest(BaseModel):
+    spill_event_id: Optional[int] = None
     spatial_radius_km: float = 50.0
     temporal_window_hours: float = 12.0
+    hindcast_hours: Optional[float] = None

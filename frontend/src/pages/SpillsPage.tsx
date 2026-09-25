@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { Flame, Calendar, Maximize, Ruler, ArrowUpRight, Search, Filter, Upload, Sparkles, X, Loader2 } from 'lucide-react';
+import { Flame, Calendar, Maximize, Ruler, ArrowUpRight, Search, Filter, Upload, Sparkles, X, Loader2, Satellite, CheckCircle2 } from 'lucide-react';
 import { spillApi } from '../services/spillApi';
+import { satelliteApi } from '../services/satelliteApi';
 import type { SpillStatus, SpillEvent } from '../types';
 
 interface ContextType {
@@ -20,6 +21,15 @@ export const SpillsPage: React.FC = () => {
   const [uploadThreshold, setUploadThreshold] = useState<number>(0.5);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Satellite CDSE Search state
+  const [showSatSearchModal, setShowSatSearchModal] = useState<boolean>(false);
+  const [satLat, setSatLat] = useState<number>(18.9);
+  const [satLon, setSatLon] = useState<number>(72.5);
+  const [satRadius, setSatRadius] = useState<number>(50);
+  const [isSearchingSat, setIsSearchingSat] = useState<boolean>(false);
+  const [satSearchResult, setSatSearchResult] = useState<any>(null);
+  const [satSearchError, setSatSearchError] = useState<string | null>(null);
 
   const { data: spills = [], isLoading, refetch } = useQuery({
     queryKey: ['spills'],
@@ -79,6 +89,23 @@ export const SpillsPage: React.FC = () => {
     navigate(`/spills/${spill.id}`);
   };
 
+  const handleSatSearch = async () => {
+    setIsSearchingSat(true);
+    setSatSearchError(null);
+    try {
+      const data = await satelliteApi.getLatest({
+        latitude: satLat,
+        longitude: satLon,
+        radius_km: satRadius,
+      });
+      setSatSearchResult(data);
+    } catch (err: any) {
+      setSatSearchError(err?.response?.data?.error?.message || 'Failed to query Sentinel-1 acquisition catalog.');
+    } finally {
+      setIsSearchingSat(false);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col p-6 overflow-y-auto select-none bg-navy-950">
       {/* Header */}
@@ -95,6 +122,17 @@ export const SpillsPage: React.FC = () => {
 
         {/* Action Controls & Filters */}
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => {
+              setShowSatSearchModal(true);
+              if (!satSearchResult) handleSatSearch();
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-700/80 hover:bg-cyan-600 border border-cyan-500/40 text-white rounded-lg text-xs font-semibold shadow-md transition"
+          >
+            <Satellite className="w-3.5 h-3.5 text-cyan-300" />
+            Sentinel-1 Catalog
+          </button>
+
           <button
             onClick={() => setShowUploadModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-md transition"
@@ -213,6 +251,159 @@ export const SpillsPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Sentinel-1 Acquisition Catalog Modal */}
+      {showSatSearchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-2xl bg-navy-900 border border-slate-700 rounded-xl shadow-2xl p-6 text-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                  <Satellite className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-white font-mono flex items-center gap-2">
+                    COPERNICUS SENTINEL-1 ACQUISITION SEARCH
+                    <span className="text-[10px] font-sans px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      CDSE PUBLIC ODATA
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    Search official European Space Agency C-SAR Ground Range Detected (GRD) acquisitions.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setShowSatSearchModal(false); setSatSearchError(null); }}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Coordinates / Radius Controls */}
+            <div className="grid grid-cols-3 gap-3 mb-4 p-3 bg-slate-950/60 rounded-lg border border-slate-800 text-xs">
+              <div>
+                <label className="block text-[11px] font-medium text-slate-400 mb-1">Center Latitude</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={satLat}
+                  onChange={(e) => setSatLat(parseFloat(e.target.value) || 0)}
+                  className="w-full bg-navy-900 border border-slate-700 rounded p-1.5 font-mono text-xs text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-slate-400 mb-1">Center Longitude</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={satLon}
+                  onChange={(e) => setSatLon(parseFloat(e.target.value) || 0)}
+                  className="w-full bg-navy-900 border border-slate-700 rounded p-1.5 font-mono text-xs text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-slate-400 mb-1">Radius (km)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={satRadius}
+                    onChange={(e) => setSatRadius(parseInt(e.target.value) || 50)}
+                    className="w-full bg-navy-900 border border-slate-700 rounded p-1.5 font-mono text-xs text-white"
+                  />
+                  <button
+                    onClick={handleSatSearch}
+                    disabled={isSearchingSat}
+                    className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white rounded font-mono text-xs shrink-0 flex items-center gap-1"
+                  >
+                    {isSearchingSat ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                    <span>Query</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Error Message */}
+            {satSearchError && (
+              <div className="p-3 mb-4 bg-red-950/50 border border-red-800/80 text-red-300 text-xs rounded-lg">
+                {satSearchError}
+              </div>
+            )}
+
+            {/* Latest Acquisition Result Card */}
+            {satSearchResult && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-semibold text-cyan-400 uppercase tracking-wider">
+                    {satSearchResult.status_title || 'Latest Available Sentinel-1 Acquisition'}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
+                    !satSearchResult.is_demo 
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
+                      : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                  }`}>
+                    {!satSearchResult.is_demo ? '🟢 REAL COPERNICUS METADATA' : '🟡 DEMO ARCHIVE SCENE'}
+                  </span>
+                </div>
+
+                {satSearchResult.acquisition ? (
+                  <div className="p-4 bg-slate-900/90 rounded-lg border border-slate-800 text-xs space-y-2.5 font-mono">
+                    <div className="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-2">
+                      <div>
+                        <div className="text-white font-bold text-[13px]">
+                          {satSearchResult.acquisition.product_id}
+                        </div>
+                        <div className="text-[11px] text-cyan-400 mt-0.5">
+                          {satSearchResult.acquisition.data_freshness || 'Acquisition time verified'}
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px]">
+                        {satSearchResult.acquisition.satellite}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px] text-slate-400 pt-1">
+                      <div>
+                        Sensor: <strong className="text-slate-200">{satSearchResult.acquisition.sensor}</strong>
+                      </div>
+                      <div>
+                        Mode: <strong className="text-slate-200">{satSearchResult.acquisition.operational_mode || 'IW'}</strong>
+                      </div>
+                      <div>
+                        Polarization: <strong className="text-slate-200">{satSearchResult.acquisition.polarization}</strong>
+                      </div>
+                      <div>
+                        Orbit: <strong className="text-slate-200">{satSearchResult.acquisition.orbit_direction}</strong>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 text-[11px] text-slate-400 border-t border-slate-800/80">
+                      <div>Timestamp: <span className="text-white">{satSearchResult.acquisition.acquisition_time}</span></div>
+                      <div>Catalog Source: <span className="text-slate-300">{satSearchResult.data_source}</span></div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-slate-950/60 rounded-lg border border-slate-800 text-xs text-slate-400 text-center font-mono">
+                    No Sentinel-1 acquisitions matched the specified geographic coordinates.
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-800 text-[11px] font-mono text-slate-500">
+              <span>Scientific Note: Uses CDSE OData API &bull; Requires credentials for full Level-1 ZIP download</span>
+              <button
+                type="button"
+                onClick={() => setShowSatSearchModal(false)}
+                className="px-4 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition"
+              >
+                Close Catalog
+              </button>
+            </div>
           </div>
         </div>
       )}

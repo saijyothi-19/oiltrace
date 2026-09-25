@@ -59,13 +59,16 @@ Interactive Web GIS Dashboard (MapLibre GL + OpenStreetMap / Ocean Bathymetry + 
 ## 3. Key Features
 
 - **SAR Oil Spill Detection**: Radiometric calibration to $\sigma^0$ (dB), adaptive Lee filter, and U-Net architecture segmenting dark ocean slicks while penalizing lookalikes (natural films, low wind $< 2.5\text{ m/s}$).
-- **Geospatial Characterization**: Automated vector polygonization (Shapely), Douglas-Peucker simplification, and true ellipsoidal geodesic surface area computation.
-- **Lagrangian Drift Hindcasting**: Reverse Monte Carlo particle simulator ($N=150$) incorporating 100% surface currents, 3% wind drag with Coriolis deflection, and Gaussian turbulent diffusion ($\sigma = \sqrt{2 K_h \Delta t}$).
+- **Copernicus CDSE Sentinel-1 Integration**: Direct OData catalog spatial-temporal search and OAuth2 download pipeline for Sentinel-1 C-SAR Level-1 GRD acquisitions directly from the European Space Agency Copernicus Data Space Ecosystem.
+- **Real Environmental Forcing Engine**: Multi-provider cascading ocean currents ($u, v\text{ m/s}$) and 10m wind vectors via Open-Meteo Marine (live operational open API) and Copernicus Marine Service (CMEMS), with deterministic Arabian Sea monsoon climatology for offline hackathon judging.
+- **Geospatial Characterization & Spill Age**: Automated vector polygonization (Shapely), Douglas-Peucker simplification, true ellipsoidal geodesic surface area computation, slick elongation ratios, and scientifically cautious Fay-regime spill age estimation bounds.
+- **Lagrangian Drift Hindcasting**: Reverse Monte Carlo particle simulator ($N=150$) incorporating 100% surface currents, 3% wind drag with Coriolis deflection, and Gaussian turbulent diffusion ($\sigma = \sqrt{2 K_h \Delta t}$) generating origin uncertainty probability polygons.
 - **Forward Drift Prediction**: Forward advection trajectory modeling to project coastal impact zones and facilitate containment barrier deployment.
-- **AIS Transponder Processing**: Cleans historical AIS telemetry, validates kinematics, detects transponder blackout gaps, and parses custom CSV/JSON vessel logs.
+- **AIS Ingestion & Anomaly Detection**: Ingestion for NOAA MarineCadastre standard CSV and live transponder telemetry, coupled with rule-based detection for sudden deceleration ($>35\%$), loitering, sharp course alterations ($>45^\circ$), and suspicious AIS blackout gaps near origin zones.
 - **5-Criteria Explainable Attribution**:
   $$S_{\text{total}} = 0.35 S_{\text{spatial}} + 0.30 S_{\text{temporal}} + 0.20 S_{\text{trajectory}} + 0.10 S_{\text{behaviour}} + 0.05 S_{\text{data\_quality}}$$
-  Classifies candidates into **HIGH**, **MEDIUM**, and **LOW** priority with transparent evidence checklists.
+  Classifies candidates into **HIGH**, **MEDIUM**, and **LOW** priority with transparent evidence checklists and explainable matrix view.
+- **Scientific Honesty & Mode Badging**: Complete visual mode badges (`🟢 REAL DATA`, `🟡 DEMO DATA`, `🟢 REAL MODEL`, `🟡 DEMO ENGINE`) backed by `/api/system/provenance` and documented in [docs/REAL_DATA_SETUP.md](docs/REAL_DATA_SETUP.md).
 - **Interactive Web GIS Operations Dashboard**: MapLibre GL canvas with zero-API-key basemaps (OpenStreetMap Standard & Esri World Ocean Bathymetry) and 8 analytical vector layers.
 - **Incident Investigation Workflow**: Case management lifecycle (`NEW` $\to$ `UNDER REVIEW` $\to$ `HIGH PRIORITY` $\to$ `RESOLVED` / `CLOSED`) with investigator notes.
 - **Formal Audit Reporting**: Print-ready and exportable incident dossiers in both JSON and print-formatted CSS for administrative enforcement.

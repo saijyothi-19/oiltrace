@@ -90,6 +90,8 @@ data/environmental/*
 !data/environmental/.gitkeep
 data/demo/*
 !data/demo/.gitkeep
+backend/data/*
+!backend/data/.gitkeep
 
 # Archives and dumps
 *.tar.gz

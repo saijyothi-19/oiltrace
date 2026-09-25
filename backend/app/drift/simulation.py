@@ -116,6 +116,24 @@ class LagrangianDriftSimulator:
         sim_start = end_sim_time if is_backward else start_time
         sim_end = start_time if is_backward else end_sim_time
 
+        # Calculate most probable origin centroid and dispersion radius
+        origin_lats = [p["lat"] for p in particles]
+        origin_lons = [p["lon"] for p in particles]
+        mean_origin_lat = float(np.mean(origin_lats))
+        mean_origin_lon = float(np.mean(origin_lons))
+
+        # Radial uncertainty (90th percentile particle spread in km)
+        from app.ais.trajectory import haversine_distance_km
+        dispersions = [
+            haversine_distance_km(mean_origin_lat, mean_origin_lon, p["lat"], p["lon"])
+            for p in particles
+        ]
+        uncertainty_radius_km = round(float(np.percentile(dispersions, 90)), 2) if dispersions else 5.0
+        uncertainty_radius_km = max(2.0, min(50.0, uncertainty_radius_km))
+
+        is_demo_forcing = cond.get("is_demo", True)
+        confidence = 0.82 if is_backward else 0.88
+
         return {
             "simulation_type": "BACKWARD" if is_backward else "FORWARD",
             "start_time": sim_start,
@@ -123,7 +141,19 @@ class LagrangianDriftSimulator:
             "duration_hours": duration_hours,
             "particle_count": particle_count,
             "particles": particles,
+            "origin": {
+                "latitude": round(mean_origin_lat, 5),
+                "longitude": round(mean_origin_lon, 5),
+            },
+            "time_window": {
+                "start": sim_start.isoformat() if hasattr(sim_start, "isoformat") else str(sim_start),
+                "end": sim_end.isoformat() if hasattr(sim_end, "isoformat") else str(sim_end),
+            },
+            "uncertainty_km": uncertainty_radius_km,
+            "confidence": confidence,
             "origin_probability_geometry": mapping(origin_geom),
-            "confidence": 0.88 if is_backward else 0.92,
+            "is_demo": is_demo_forcing,
+            "data_source": cond.get("source", "Environmental Forcing Engine"),
+            "model_classification": "Real-data Open-Meteo/Copernicus drift" if not is_demo_forcing else "Demonstration Climatology Drift",
             "environmental_conditions": cond,
         }

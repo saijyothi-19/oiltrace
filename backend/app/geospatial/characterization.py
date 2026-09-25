@@ -105,14 +105,25 @@ class SpillCharacterizationEngine:
         # 3. Calculate geodesic area and perimeter
         total_area_km2 = float(np.sum(binary_mask) * pixel_area_km2)
         total_perimeter_km = 0.0
+        px_scale_km = (scene_width_km / w + scene_height_km / h) / 2.0
+
+        # Major and minor axis calculation via minimum area rotated bounding box
+        largest_cnt = max(contours, key=cv2.contourArea)
+        rect = cv2.minAreaRect(largest_cnt)
+        (center_x, center_y), (rect_w, rect_h), orientation_angle = rect
+
+        major_axis_km = max(rect_w, rect_h) * px_scale_km
+        minor_axis_km = min(rect_w, rect_h) * px_scale_km
 
         # Approximate perimeter via contour arc lengths
         for cnt in contours:
             if cv2.contourArea(cnt) * pixel_area_km2 >= min_area_km2:
                 arc_len = cv2.arcLength(cnt, closed=True)
-                # Average pixel size in km
-                px_scale_km = (scene_width_km / w + scene_height_km / h) / 2.0
                 total_perimeter_km += arc_len * px_scale_km
+
+        # Shape statistics
+        circularity = (4.0 * math.pi * total_area_km2) / max(total_perimeter_km ** 2, 1e-5)
+        elongation = major_axis_km / max(minor_axis_km, 1e-4)
 
         # Centroid & Bounding box
         centroid_pt = unified_geom.centroid
@@ -122,11 +133,28 @@ class SpillCharacterizationEngine:
         overall_confidence = float(np.mean(confidences)) if confidences else 0.85
         overall_confidence = max(0.50, min(0.99, overall_confidence))
 
+        # Scientifically Cautious Spill Age Estimation
+        age_estimation = SpillAgeEstimator.estimate_age(
+            area_km2=total_area_km2,
+            perimeter_km=total_perimeter_km,
+            elongation=elongation,
+            major_axis_km=major_axis_km,
+        )
+
         return {
             "spill_detected": True,
             "confidence": round(overall_confidence, 3),
             "area_km2": round(total_area_km2, 3),
             "perimeter_km": round(total_perimeter_km, 3),
+            "major_axis_km": round(major_axis_km, 3),
+            "minor_axis_km": round(minor_axis_km, 3),
+            "orientation_deg": round(orientation_angle, 1),
+            "shape_statistics": {
+                "circularity": round(min(1.0, circularity), 3),
+                "elongation_ratio": round(elongation, 2),
+                "compactness": "ELONGATED_SLICK" if elongation > 3.0 else "COMPACT_FORMATION",
+            },
+            "age_estimation": age_estimation,
             "centroid": {"type": "Point", "coordinates": [round(centroid_pt.x, 5), round(centroid_pt.y, 5)]},
             "bounding_box": mapping(bbox_geom),
             "geometry": mapping(unified_geom),
@@ -180,4 +208,65 @@ class SpillCharacterizationEngine:
             cv2.imwrite(output_path, bgra)
 
         return rgba
+
+
+class SpillAgeEstimator:
+    """
+    Scientifically Cautious Spill Age Estimation Engine.
+    In accordance with maritime remote sensing physics:
+    - Slicks elongate along the wind/current shear axis over time.
+    - Spreading follows Fay's empirical gravity-viscous regime: r(t) ~ (Delta * g * V^2 / nu^0.5)^0.25 * t^0.25.
+    - IMPORTANT: Without multi-temporal satellite revisit passes or known discharge volume/viscosity,
+      exact age cannot be scientifically proven. This class returns an estimated bounds range
+      with explicit uncertainty caveats.
+    """
+
+    @classmethod
+    def estimate_age(
+        cls,
+        area_km2: float,
+        perimeter_km: float,
+        elongation: float,
+        major_axis_km: float,
+        wind_speed_mps: Optional[float] = None,
+        is_multi_pass: bool = False
+    ) -> Dict[str, Any]:
+        if area_km2 <= 0.0:
+            return {
+                "status": "AGE_UNAVAILABLE",
+                "estimated_age_range_hours": [0.0, 0.0],
+                "confidence": "UNAVAILABLE",
+                "methodology": "No detected spill surface area.",
+                "caveat": "Age estimation unavailable for zero area."
+            }
+
+        # Estimate plausible age bounds using Fay spreading regime & shear elongation
+        # Fast steaming releases or sheared slicks have high elongation (> 4.0)
+        # Moderate wind speed (~5-10 m/s) accelerates windrow shearing
+        wind_factor = 1.0
+        if wind_speed_mps is not None and wind_speed_mps > 0.0:
+            wind_factor = max(0.6, min(2.0, wind_speed_mps / 6.0))
+
+        # Base spreading time proxy (hours)
+        base_spread_hours = math.sqrt(area_km2) * 4.0 / wind_factor
+        elongation_offset = min(12.0, elongation * 1.5)
+
+        min_hours = max(1.0, round(base_spread_hours * 0.5 + elongation_offset * 0.3, 1))
+        max_hours = max(min_hours + 3.0, round(base_spread_hours * 1.8 + elongation_offset * 1.2, 1))
+
+        # If single-pass observation without temporal baseline
+        confidence_level = "MODERATE" if (is_multi_pass or 3.0 <= elongation <= 15.0) else "LOW"
+
+        return {
+            "status": "ESTIMATED_RANGE",
+            "estimated_age_range_hours": [min_hours, max_hours],
+            "confidence": confidence_level,
+            "morphological_regime": "SHEARED_TRAILING_SLICK" if elongation > 4.0 else "LOCALIZED_RADIAL_POOL",
+            "methodology": "Fay gravity-viscous spreading proxy with wind-shear elongation correction",
+            "caveat": (
+                "Caution: Estimated age range is an analytical proxy. Exact release timestamp cannot be "
+                "definitively established from a single satellite observation without multi-pass radar data."
+            ),
+        }
+
 

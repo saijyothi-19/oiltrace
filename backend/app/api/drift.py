@@ -52,6 +52,12 @@ def _execute_simulation(
         parameters_json={
             "windage": payload.windage_factor,
             "timestep_minutes": payload.timestep_minutes,
+            "origin": sim_data.get("origin"),
+            "time_window": sim_data.get("time_window"),
+            "uncertainty_km": sim_data.get("uncertainty_km"),
+            "is_demo": sim_data.get("is_demo", True),
+            "data_source": sim_data.get("data_source"),
+            "model_classification": sim_data.get("model_classification"),
             "environmental": sim_data["environmental_conditions"],
         },
         confidence=sim_data["confidence"],
@@ -85,11 +91,19 @@ def _execute_simulation(
 
 @router.post("/backward", response_model=DriftSimulationResponse)
 def run_backward_hindcast(payload: DriftSimulationRequest, db: Session = Depends(get_db)):
+    """Reconstructs probable spill release origin zone using backward Lagrangian tracking."""
+    return _execute_simulation(payload, is_backward=True, db=db)
+
+
+@router.post("/hindcast", response_model=DriftSimulationResponse)
+def run_hindcast_alias(payload: DriftSimulationRequest, db: Session = Depends(get_db)):
+    """Unified endpoint alias for backward hindcasting."""
     return _execute_simulation(payload, is_backward=True, db=db)
 
 
 @router.post("/forward", response_model=DriftSimulationResponse)
 def run_forward_drift(payload: DriftSimulationRequest, db: Session = Depends(get_db)):
+    """Simulates forward trajectory to forecast ecological landfall risk."""
     return _execute_simulation(payload, is_backward=False, db=db)
 
 

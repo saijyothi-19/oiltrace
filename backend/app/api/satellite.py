@@ -22,6 +22,90 @@ def list_satellite_images(
     return SatelliteService.get_all(db, limit, offset)
 
 
+from app.services.copernicus_service import CopernicusSatelliteService
+
+@router.get("/latest")
+def get_latest_satellite_acquisition(
+    latitude: float = Query(18.9, ge=-90.0, le=90.0),
+    longitude: float = Query(72.5, ge=-180.0, le=180.0),
+    radius_km: float = Query(50.0, gt=0, le=500.0),
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+):
+    """
+    Retrieves the Latest Available Sentinel-1 Acquisition over the region of interest.
+    Strictly marked as 'Latest Available Sentinel-1 Acquisition' to avoid misleading 'live feed' claims.
+    """
+    return CopernicusSatelliteService.get_latest_acquisition(
+        lat=latitude,
+        lon=longitude,
+        radius_km=radius_km,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
+@router.get("/cdse/search")
+def search_copernicus_catalog(
+    min_lon: float = Query(72.0, ge=-180.0, le=180.0),
+    min_lat: float = Query(18.0, ge=-90.0, le=90.0),
+    max_lon: float = Query(73.5, ge=-180.0, le=180.0),
+    max_lat: float = Query(19.8, ge=-90.0, le=90.0),
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    polarization: Optional[str] = Query(None, description="e.g. VV, VH, VV+VH"),
+    orbit_direction: Optional[str] = Query(None, description="ASCENDING or DESCENDING"),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """
+    Direct spatial-temporal search of the European Copernicus Data Space Ecosystem (CDSE)
+    for Sentinel-1 C-SAR Ground Range Detected (GRD) acquisitions.
+    """
+    return CopernicusSatelliteService.search_acquisitions(
+        min_lon=min_lon,
+        min_lat=min_lat,
+        max_lon=max_lon,
+        max_lat=max_lat,
+        start_date=start_date,
+        end_date=end_date,
+        polarization=polarization,
+        orbit_direction=orbit_direction,
+        limit=limit,
+    )
+
+
+@router.get("/search")
+def search_satellite_images(
+    satellite: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    live_cdse: bool = Query(False, description="Search live Copernicus CDSE if True"),
+    min_lon: Optional[float] = None,
+    min_lat: Optional[float] = None,
+    max_lon: Optional[float] = None,
+    max_lat: Optional[float] = None,
+    db: Session = Depends(get_db)
+):
+    if live_cdse and min_lon is not None and min_lat is not None and max_lon is not None and max_lat is not None:
+        return CopernicusSatelliteService.search_acquisitions(
+            min_lon=min_lon,
+            min_lat=min_lat,
+            max_lon=max_lon,
+            max_lat=max_lat,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+    query = db.query(SatelliteImage)
+    if satellite:
+        query = query.filter(SatelliteImage.satellite.ilike(f"%{satellite}%"))
+    if start_date:
+        query = query.filter(SatelliteImage.acquisition_time >= start_date)
+    if end_date:
+        query = query.filter(SatelliteImage.acquisition_time <= end_date)
+    return query.order_by(SatelliteImage.acquisition_time.desc()).limit(100).all()
+
+
 @router.get("/{id}", response_model=SatelliteImageResponse)
 def get_satellite_image(id: int, db: Session = Depends(get_db)):
     image = SatelliteService.get_by_id(db, id)
@@ -31,23 +115,6 @@ def get_satellite_image(id: int, db: Session = Depends(get_db)):
             detail=f"Satellite product #{id} not found."
         )
     return image
-
-
-@router.get("/search", response_model=List[SatelliteImageResponse])
-def search_satellite_images(
-    satellite: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    db: Session = Depends(get_db)
-):
-    query = db.query(SatelliteImage)
-    if satellite:
-        query = query.filter(SatelliteImage.satellite.ilike(f"%{satellite}%"))
-    if start_date:
-        query = query.filter(SatelliteImage.acquisition_time >= start_date)
-    if end_date:
-        query = query.filter(SatelliteImage.acquisition_time <= end_date)
-    return query.order_by(SatelliteImage.acquisition_time.desc()).limit(100).all()
 
 
 @router.post("/upload", response_model=SatelliteImageResponse, status_code=status.HTTP_201_CREATED)

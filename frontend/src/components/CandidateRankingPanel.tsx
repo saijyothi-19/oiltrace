@@ -25,27 +25,35 @@ export const CandidateRankingPanel: React.FC<CandidateRankingPanelProps> = ({
   onSelectCandidate,
   isLoading = false,
 }) => {
+  const [viewMode, setViewMode] = React.useState<'cards' | 'table'>('cards');
+
   const getPriorityBadge = (priority: PriorityLevel) => {
     switch (priority) {
       case 'HIGH':
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse">
-            HIGH PRIORITY
+          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/40">
+            HIGH LIKELIHOOD
           </span>
         );
       case 'MEDIUM':
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40">
-            MEDIUM PRIORITY
+          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40">
+            PRIORITY CANDIDATE
           </span>
         );
       case 'LOW':
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/40">
-            LOW PRIORITY
+          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/40">
+            LOW CORRELATION
           </span>
         );
     }
+  };
+
+  const getQualitativeRating = (score: number) => {
+    if (score >= 70) return <span className="text-emerald-400 font-semibold">High</span>;
+    if (score >= 45) return <span className="text-amber-400 font-semibold">Medium</span>;
+    return <span className="text-slate-500">Low</span>;
   };
 
   return (
@@ -56,19 +64,28 @@ export const CandidateRankingPanel: React.FC<CandidateRankingPanelProps> = ({
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 text-cyan-400" />
             <h2 className="text-xs font-bold font-mono tracking-tight text-white uppercase">
-              Candidate Vessel Attribution
+              Attribution / Investigation Score
             </h2>
           </div>
           <p className="text-[10px] text-slate-400">
-            Ranked correlation with estimated spill origin
+            Spatiotemporal correlation ranking (Decision support only)
           </p>
         </div>
-        <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-          {candidates.length} Analyzed
-        </span>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setViewMode(viewMode === 'cards' ? 'table' : 'cards')}
+            className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[10px] font-mono transition"
+            title="Toggle between detailed cards and summary table"
+          >
+            {viewMode === 'cards' ? 'Table View' : 'Card View'}
+          </button>
+          <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+            {candidates.length}
+          </span>
+        </div>
       </div>
 
-      {/* Candidates List */}
+      {/* Content */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-40 text-slate-400 text-xs">
@@ -79,6 +96,46 @@ export const CandidateRankingPanel: React.FC<CandidateRankingPanelProps> = ({
           <div className="flex flex-col items-center justify-center h-40 text-slate-500 text-xs text-center px-4">
             <Info className="w-6 h-6 mb-2 text-slate-600" />
             <span>No candidate vessels found in spatial-temporal origin window.</span>
+          </div>
+        ) : viewMode === 'table' ? (
+          /* Explainable Table View */
+          <div className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950/70 p-1">
+            <table className="w-full text-left font-mono text-[10px]">
+              <thead className="bg-slate-900/90 text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th className="p-1.5">VESSEL</th>
+                  <th className="p-1.5">SCORE</th>
+                  <th className="p-1.5">PROX</th>
+                  <th className="p-1.5">TIME</th>
+                  <th className="p-1.5">TRAJ</th>
+                  <th className="p-1.5">BEHAV</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {candidates.map((c, i) => {
+                  const isSelected = selectedMmsi === (c.vessel?.mmsi || String(c.vessel_id));
+                  return (
+                    <tr
+                      key={c.id}
+                      onClick={() => onSelectCandidate(c)}
+                      className={`cursor-pointer hover:bg-slate-800/80 transition-colors ${
+                        isSelected ? 'bg-cyan-500/10 text-cyan-200' : 'text-slate-300'
+                      }`}
+                    >
+                      <td className="p-1.5">
+                        <div className="font-semibold text-white truncate max-w-[90px]">{c.vessel?.name || `ID ${c.vessel_id}`}</div>
+                        <div className="text-[9px] text-slate-500">{c.vessel?.mmsi || c.vessel_id}</div>
+                      </td>
+                      <td className="p-1.5 font-bold text-cyan-400">{c.overall_score.toFixed(0)}</td>
+                      <td className="p-1.5">{getQualitativeRating(c.spatial_score)}</td>
+                      <td className="p-1.5">{getQualitativeRating(c.temporal_score)}</td>
+                      <td className="p-1.5">{getQualitativeRating(c.trajectory_score)}</td>
+                      <td className="p-1.5">{getQualitativeRating(c.behaviour_score)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         ) : (
           candidates.map((candidate, idx) => {

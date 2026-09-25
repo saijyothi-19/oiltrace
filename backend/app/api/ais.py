@@ -61,6 +61,52 @@ def get_vessel_track(
     return positions
 
 
+@router.get("/track/{mmsi}", response_model=List[AisPositionResponse])
+def get_vessel_track_alias(
+    mmsi: str,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+    limit: int = Query(1000, ge=1, le=5000),
+    db: Session = Depends(get_db)
+):
+    """Unified route alias for fetching chronological vessel waypoints."""
+    return get_vessel_track(mmsi=mmsi, start_time=start_time, end_time=end_time, limit=limit, db=db)
+
+
+@router.get("/vessel/{mmsi}/anomalies")
+def get_vessel_behaviour_anomalies(
+    mmsi: str,
+    origin_lat: Optional[float] = Query(None),
+    origin_lon: Optional[float] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Evaluates vessel trajectory for sudden deceleration, sharp turns, loitering, and AIS blackouts.
+    Results are clearly flagged as decision-support indicators, not proof of illegal activity.
+    """
+    from app.ais.anomaly import VesselBehaviourAnomalyDetector
+    vessel = db.query(Vessel).filter(Vessel.mmsi == mmsi).first()
+    if not vessel:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Vessel with MMSI {mmsi} not found."
+        )
+
+    positions = db.query(AisPosition).filter(AisPosition.vessel_id == vessel.id).order_by(AisPosition.timestamp.asc()).all()
+    analysis = VesselBehaviourAnomalyDetector.analyze_trajectory(
+        positions=positions,
+        origin_lat=origin_lat,
+        origin_lon=origin_lon,
+    )
+    analysis["vessel"] = {
+        "mmsi": vessel.mmsi,
+        "name": vessel.name,
+        "ship_type": vessel.ship_type,
+        "flag": vessel.flag,
+    }
+    return analysis
+
+
 @router.get("/nearby")
 def get_nearby_vessels(
     lat: float = Query(..., ge=-90, le=90),

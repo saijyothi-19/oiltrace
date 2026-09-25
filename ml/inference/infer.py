@@ -70,6 +70,11 @@ class OilSpillInferenceEngine:
                 output_shape=(h, w),
                 use_blending=True
             )
+            model_type = "UNET"
+            model_version = "v1.0-deep-conv-unet"
+            is_demo = False
+            inf_mode = "PYTORCH_SLIDING_WINDOW_HANN"
+            diag_notice = "Deep Convolutional U-Net segmentation with Hann window tile reconstruction."
         else:
             # High-fidelity analytical radiometric contrast model
             # Oil slicks strongly dampen capillary waves, causing pronounced backscatter reduction (dark patches)
@@ -84,6 +89,12 @@ class OilSpillInferenceEngine:
             scaled_logits = (contrast_diff - 0.05) * 15.0
             prob_map = 1.0 / (1.0 + np.exp(-scaled_logits))
             prob_map = np.clip(prob_map, 0.0, 1.0).astype(np.float32)
+
+            model_type = "ANALYTICAL_CONTRAST"
+            model_version = "v1.0-radiometric-contrast-demo"
+            is_demo = True
+            inf_mode = "ADAPTIVE_RADIOMETRIC_CONTRAST_FALLBACK"
+            diag_notice = "Analytical radiometric contrast engine (Demo fallback: PyTorch neural model checkpoint required for deep inference)."
 
         # Look-alike filtering
         lookalike_info = {}
@@ -100,6 +111,11 @@ class OilSpillInferenceEngine:
         heatmap_rgba = SarPreprocessor.generate_probability_heatmap(prob_map, threshold_cut=0.15)
 
         return {
+            "model_type": model_type,
+            "model_version": model_version,
+            "is_demo": is_demo,
+            "inference_mode": inf_mode,
+            "diagnostic_notice": diag_notice,
             "probability_map": prob_map,
             "binary_mask": binary_mask,
             "heatmap_rgba": heatmap_rgba,
@@ -118,4 +134,7 @@ class OilSpillInferenceEngine:
         prep = SarPreprocessor.preprocess_sar(file_path)
         result = self.segment_sar_array(prep["processed_array"], wind_speed_mps=wind_speed_mps)
         result["input_shape"] = prep["shape"]
+        result["is_calibrated"] = prep.get("is_calibrated", False)
+        result["calibration_method"] = prep.get("calibration_method", "UNKNOWN")
+        result["polarization_used"] = prep.get("polarization_used", "VV")
         return result

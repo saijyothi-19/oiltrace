@@ -51,6 +51,10 @@ export const systemApi = {
     const { data } = await api.get<SystemStatus>('/api/system/status');
     return data;
   },
+  getProvenance: async (): Promise<any> => {
+    const { data } = await api.get('/api/system/provenance');
+    return data;
+  },
   loadDemo: async (): Promise<{ success: boolean; spill_id: number; message: string }> => {
     const { data } = await api.post('/api/demo/load');
     return data;

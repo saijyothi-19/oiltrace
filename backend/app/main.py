@@ -135,6 +135,7 @@ from app.api.detection import router as detection_router
 from app.api.drift import router as drift_router
 from app.api.attribution import router as attribution_router
 from app.api.investigations import router as investigations_router
+from app.api.environment import router as environment_router
 from app.api.reports import router as reports_router
 from app.api.demo import router as demo_router
 
@@ -144,6 +145,7 @@ app.include_router(ais_router)
 app.include_router(satellite_router)
 app.include_router(spills_router)
 app.include_router(detection_router)
+app.include_router(environment_router)
 app.include_router(drift_router)
 app.include_router(attribution_router)
 app.include_router(investigations_router)

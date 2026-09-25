@@ -17,7 +17,7 @@ class SarPreprocessor:
     """
 
     @staticmethod
-    def load_raster(input_path: str) -> np.ndarray:
+    def load_raster(input_path: str, polarization: str = "VV") -> np.ndarray:
         """Loads single-band or multi-band raster as float32 2D array."""
         if not os.path.exists(input_path):
             raise FileNotFoundError(f"SAR raster not found at: {input_path}")
@@ -26,10 +26,17 @@ class SarPreprocessor:
         if ext in (".tif", ".tiff"):
             img = tifffile.imread(input_path)
             if img.ndim == 3:
-                img = img[0]  # Take primary polarization band (usually VV)
+                # Sentinel-1 GRD products: Channel 0 is VV (co-polarized), Channel 1 is VH (cross-polarized)
+                if polarization.upper() == "VH" and img.shape[0] > 1:
+                    img = img[1]
+                else:
+                    img = img[0]  # Primary polarization (default VV)
             return img.astype(np.float32)
         elif ext in (".npy",):
-            return np.load(input_path).astype(np.float32)
+            arr = np.load(input_path)
+            if arr.ndim == 3:
+                arr = arr[0] if arr.shape[0] < arr.shape[2] else arr[:, :, 0]
+            return arr.astype(np.float32)
         elif ext in (".webp",):
             # WebP decoding: Pillow handles RGB, RGBA, and lossy/lossless WebP variants
             try:
@@ -99,13 +106,18 @@ class SarPreprocessor:
         input -> raw raster -> calibrated dB -> lee despeckled -> normalized [0, 1].
         """
         cfg = config or {}
+        polarization = cfg.get("polarization", "VV")
         apply_calibration = cfg.get("apply_calibration", True)
         apply_despeckle = cfg.get("apply_despeckle", True)
         min_db = cfg.get("min_db", -30.0)
         max_db = cfg.get("max_db", 0.0)
 
-        raw = cls.load_raster(input_path)
+        raw = cls.load_raster(input_path, polarization=polarization)
         ext = os.path.splitext(input_path)[1].lower()
+
+        is_calibrated = False
+        calib_method = "LINEAR_PROXY"
+        notice = ""
 
         if ext in (".png", ".jpg", ".jpeg", ".webp") and cfg.get("apply_calibration") is None:
             # 8-bit preview image: scale directly from 0-255 to [0, 1]
@@ -113,13 +125,25 @@ class SarPreprocessor:
             if apply_despeckle:
                 normalized = cls.lee_filter(normalized, window_size=3)
             normalized = np.clip(normalized, 0.0, 1.0).astype(np.float32)
+            is_calibrated = False
+            calib_method = "8BIT_VISUAL_PROXY"
+            notice = "8-bit optical/preview raster: Linear scaling applied without radiometric sigma0 calibration."
         elif raw.max() <= 1.0 and ext in (".npy",):
             normalized = raw
+            is_calibrated = True
+            calib_method = "PRE_CALIBRATED_NUMPY"
+            notice = "Pre-normalized float32 NumPy array."
         else:
             if apply_calibration:
                 db = cls.calibrate_to_sigma0_db(raw)
+                is_calibrated = True
+                calib_method = "RADIOMETRIC_SIGMA0_DB"
+                notice = "Radiometric calibration applied: sigma0 (dB) clipped to [-30, 0] dB."
             else:
                 db = raw
+                is_calibrated = False
+                calib_method = "RAW_DN"
+                notice = "Digital Number (DN) values processed directly without sigma0 calibration."
 
             if apply_despeckle:
                 despeckled = cls.lee_filter(db)
@@ -141,6 +165,11 @@ class SarPreprocessor:
             "max_val": float(np.max(normalized)),
             "mean_val": float(np.mean(normalized)),
             "output_path": output_path,
+            "polarization_used": polarization,
+            "is_calibrated": is_calibrated,
+            "calibration_method": calib_method,
+            "speckle_filtered": apply_despeckle,
+            "diagnostic_notice": notice,
         }
 
     @staticmethod

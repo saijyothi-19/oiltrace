@@ -97,8 +97,20 @@ def run_attribution_analysis(
     return scored_candidates
 
 
+@router.post("/run", response_model=List[VesselCandidateResponse])
+def run_attribution_analysis_unified(
+    payload: AttributionAnalyzeRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Unified endpoint for executing multi-factor explainable vessel attribution scoring.
+    """
+    return run_attribution_analysis(spill_id=payload.spill_event_id, payload=payload, db=db)
+
+
 @router.get("/{spill_id}/candidates", response_model=List[VesselCandidateResponse])
 def get_candidates_for_spill(spill_id: int, db: Session = Depends(get_db)):
+    """Returns ranked candidate vessels for a given spill event."""
     candidates = db.query(VesselCandidate).filter(
         VesselCandidate.spill_event_id == spill_id
     ).order_by(VesselCandidate.overall_score.desc()).all()
@@ -107,6 +119,7 @@ def get_candidates_for_spill(spill_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{spill_id}/candidate/{candidate_id}", response_model=VesselCandidateResponse)
 def get_candidate_details(spill_id: int, candidate_id: int, db: Session = Depends(get_db)):
+    """Returns granular attribution score breakdown for a specific candidate vessel."""
     cand = db.query(VesselCandidate).filter(
         VesselCandidate.id == candidate_id,
         VesselCandidate.spill_event_id == spill_id
@@ -117,3 +130,16 @@ def get_candidate_details(spill_id: int, candidate_id: int, db: Session = Depend
             detail=f"Candidate #{candidate_id} not found for spill #{spill_id}."
         )
     return cand
+
+
+@router.get("/{investigation_id}", response_model=List[VesselCandidateResponse])
+def get_candidates_for_investigation(investigation_id: int, db: Session = Depends(get_db)):
+    """
+    Returns ranked candidate vessels for a given spill event or investigation ID.
+    """
+    candidates = db.query(VesselCandidate).filter(
+        VesselCandidate.spill_event_id == investigation_id
+    ).order_by(VesselCandidate.overall_score.desc()).all()
+    return candidates
+
+
