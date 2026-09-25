@@ -102,6 +102,7 @@ backend/data/*
 *.zip
 *.7z
 *.rar
+zenodo_download/
 
 # Operating Systems & IDEs
 .idea/
